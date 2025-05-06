@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiple Images Merger</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        .upload-container {
+            margin: 20px 0;
+        }
+        .image-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        .image-preview img {
+            max-width: 100px;
+            max-height: 100px;
+            object-fit: cover;
+        }
+        .image-item {
+            position: relative;
+            display: inline-block;
+        }
+        .remove-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: red;
+            color: white;
+            border: none;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #mergedImage {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        #processingText {
+            display: none;
+            color: #555;
+            margin-top: 20px;
+        }
+        .post-merge-options {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Merger</h1>
+    <p>Effortlessly join your images into one. To proceed, begin by uploading your images one by one. Minimum two images are required.</p>
+    
+    <div class="upload-container">
+        <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+        <button onclick="document.getElementById('imageUpload').click()">Upload Image</button>
+    </div>
+    
+    <div id="imagePreview" class="image-preview"></div>
+    
+    <button id="addAnother" style="display: none;" onclick="document.getElementById('imageUpload').click()">Add Another Image</button>
+    
+    <button id="mergeButton" disabled onclick="mergeImages()">Merge Images</button>
+    
+    <p id="processingText">Images are being processed, please wait...</p>
+    <img id="mergedImage" style="display: none;" alt="Merged Image">
+    
+    <div id="postMergeOptions" class="post-merge-options">
+        <p>Select any available format to download your image:</p>
+        <select id="formatSelect">
+            <option value="png">PNG</option>
+            <option value="jpeg">JPEG</option>
+            <option value="webp">WebP</option>
+        </select>
+        <p>Input your image name here:</p>
+        <input type="text" id="imageName" placeholder="Merged Image">
+        <br>
+        <button onclick="downloadImage()">Download</button>
+    </div>
+    
+    <button onclick="resetAll()">Reset All</button>
+
+    <script>
+        let images = [];
+        
+        document.getElementById('imageUpload').addEventListener('change', handleImageUpload);
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    images.push({ src: e.target.result, file });
+                    displayImages();
+                    updateMergeButton();
+                    document.getElementById('addAnother').style.display = 'block';
+                    event.target.value = ''; // Clear input
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function displayImages() {
+            const preview = document.getElementById('imagePreview');
+            preview.innerHTML = '';
+            images.forEach((image, index) => {
+                const div = document.createElement('div');
+                div.className = 'image-item';
+                const img = document.createElement('img');
+                img.src = image.src;
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.innerText = 'remove';
+                removeBtn.onclick = () => removeImage(index);
+                div.appendChild(img);
+                div.appendChild(removeBtn);
+                preview.appendChild(div);
+            });
+        }
+
+        function removeImage(index) {
+            images.splice(index, 1);
+            displayImages();
+            updateMergeButton();
+            if (images.length === 0) {
+                document.getElementById('addAnother').style.display = 'none';
+            }
+        }
+
+        function updateMergeButton() {
+            document.getElementById('mergeButton').disabled = images.length < 2;
+        }
+
+        function mergeImages() {
+            document.getElementById('processingText').style.display = 'block';
+            document.getElementById('mergedImage').style.display = 'none';
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Load all images
+            const imageObjects = images.map(image => {
+                const img = new Image();
+                img.src = image.src;
+                return img;
+            });
+
+            // Wait for all images to load
+            Promise.all(imageObjects.map(img => new Promise(resolve => { img.onload = resolve; })))
+                .then(() => {
+                    // Calculate total width and max height
+                    let totalWidth = 0;
+                    let maxHeight = 0;
+                    imageObjects.forEach(img => {
+                        totalWidth += img.width;
+                        maxHeight = Math.max(maxHeight, img.height);
+                    });
+
+                    // Set canvas size
+                    canvas.width = totalWidth;
+                    canvas.height = maxHeight;
+
+                    // Draw images
+                    let currentX = 0;
+                    imageObjects.forEach(img => {
+                        ctx.drawImage(img, currentX, 0, img.width, img.height);
+                        currentX += img.width;
+                    });
+
+                    // Display merged image
+                    const mergedImage = document.getElementById('mergedImage');
+                    mergedImage.src = canvas.toDataURL('image/png');
+                    mergedImage.style.display = 'block';
+                    document.getElementById('processingText').style.display = 'none';
+                    document.getElementById('postMergeOptions').style.display = 'block';
+                });
+        }
+
+        function downloadImage() {
+            const format = document.getElementById('formatSelect').value;
+            const name = document.getElementById('imageName').value || 'merged_image';
+            const mergedImage = document.getElementById('mergedImage');
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = mergedImage.naturalWidth;
+            canvas.height = mergedImage.naturalHeight;
+            ctx.drawImage(mergedImage, 0, 0);
+            
+            const mimeType = `image/${format === 'jpeg' ? 'jpeg' : format}`;
+            const link = document.createElement('a');
+            link.download = `${name}.${format}`;
+            link.href = canvas.toDataURL(mimeType, format === 'jpeg' ? 0.9 : 1.0);
+            link.click();
+        }
+
+        function resetAll() {
+            images = [];
+            document.getElementById('imagePreview').innerHTML = '';
+            document.getElementById('addAnother').style.display = 'none';
+            document.getElementById('mergeButton').disabled = true;
+            document.getElementById('mergedImage').style.display = 'none';
+            document.getElementById('processingText').style.display = 'none';
+            document.getElementById('postMergeOptions').style.display = 'none';
+            document.getElementById('imageName').value = '';
+            document.getElementById('imageUpload').value = '';
+        }
+    </script>
+</body>
+</html>
